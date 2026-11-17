@@ -11,7 +11,7 @@ local function build()
     win:AddCheck("Upgrade score in item tooltips", function() return db.tooltip end,
         function(v) db.tooltip = v end)
     win:AddSlider("Count as better when ahead by", 0, 10, 1, function() return db.margin end,
-        function(v) db.margin = v; ns.ClearCache(); ns.RefreshBags() end, function(v) return ("%d points"):format(v) end)
+        function(v) db.margin = v; ns.ClearCache(); ns.RefreshBags() end, function(v) return v == 1 and "1 point" or ("%d points"):format(v) end)
     win:AddCheck("Minimap button", function() return not db.minimapHide end,
         function(v) db.minimapHide = not v; mini:UpdateShown() end)
     win:Finish()

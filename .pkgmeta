@@ -1,0 +1,10 @@
+package-as: ForeverGear
+
+ignore:
+  - README.md
+  - .github
+  - media
+
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
