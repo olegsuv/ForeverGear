@@ -8,6 +8,8 @@
 ## AddonCompartmentFunc: ForeverGear_OnAddonCompartmentClick
 ## OptionalDeps: Bagnon
 ## X-License: MIT
+## X-Website: https://github.com/olegsuv/ForeverGear
+## X-Curse-Project-ID: 1813434
 
 ForeverUI.lua
 Score.lua
