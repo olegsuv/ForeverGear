@@ -1,0 +1,15 @@
+## Interface: 16001
+## Title: Forever Gear
+## Notes: Green arrow on bag items that are better than what you wear, and an upgrade score in item tooltips (WoW Forever).
+## Author: olegsuv
+## Version: @project-version@
+## SavedVariables: ForeverGearDB
+## IconTexture: Interface\Icons\INV_Chest_Chain_05
+## AddonCompartmentFunc: ForeverGear_OnAddonCompartmentClick
+## OptionalDeps: Bagnon
+## X-License: MIT
+
+ForeverUI.lua
+Score.lua
+Bags.lua
+Options.lua
