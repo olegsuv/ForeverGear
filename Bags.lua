@@ -38,6 +38,8 @@ local function addScoreLine(tooltip, data)
             local d = score - eq
             local color = d > (ns.db.margin or 1) and "|cff33ff33" or (d < -(ns.db.margin or 1) and "|cffff4444" or "|cffaaaaaa")
             text = ("|cff66ccffUpgrade score %s|r %s(%+.1f vs equipped)|r"):format(score, color, d)
+        elseif eq == false then
+            text = ("|cff66ccffUpgrade score %s|r |cffaaaaaa(not compared with your off hand)|r"):format(score)
         else
             text = ("|cff66ccffUpgrade score %s|r"):format(score)
         end

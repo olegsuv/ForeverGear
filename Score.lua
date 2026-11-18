@@ -140,10 +140,26 @@ function ns.ItemScore(link)
     return score, usable, equipLoc
 end
 
--- score of what you wear in the slots this item would replace (lowest of rings/trinkets/1h pair)
+-- what sits in the off hand: a shield or a held item is a choice (tank, caster), not
+-- something a weapon upgrades
+local OFF_KIND = {
+    INVTYPE_WEAPON = "weapon", INVTYPE_WEAPONOFFHAND = "weapon",
+    INVTYPE_SHIELD = "shield", INVTYPE_HOLDABLE = "holdable",
+}
+local function offHandKind()
+    local id = GetInventoryItemID("player", 17)
+    if not id then return nil end
+    local _, _, _, loc = C_Item.GetItemInfoInstant(id)
+    return OFF_KIND[loc]
+end
+
+-- score of what you wear in the slots this item would replace (lowest of rings/trinkets/1h pair);
+-- false when it would only replace a different kind of off hand (a dagger for your shield)
 function ns.EquippedScore(equipLoc)
     local slots = SLOTS[equipLoc]
     if not slots then return nil end
+    local off = offHandKind()
+    if equipLoc == "INVTYPE_2HWEAPON" and off == "shield" then return false end
     if equipLoc == "INVTYPE_2HWEAPON" then
         local sum, any = 0, false
         for _, s in ipairs({ 16, 17 }) do
@@ -164,11 +180,15 @@ function ns.EquippedScore(equipLoc)
             sc = ns.ItemScore(l)
             if sc == nil then return nil end
         end
-        -- one-handers: only compare with the off hand if you can dual wield
-        if not (s == 17 and equipLoc == "INVTYPE_WEAPON" and not (IsPlayerSpell and IsPlayerSpell(674))) then
+        -- one-handers: only compare with the off hand if you can dual wield;
+        -- off hand: only weapon vs weapon, shield vs shield, held item vs held item
+        local skip = s == 17 and ((equipLoc == "INVTYPE_WEAPON" and not (IsPlayerSpell and IsPlayerSpell(674)))
+            or (off and off ~= OFF_KIND[equipLoc]))
+        if not skip then
             if not best or sc < best then best = sc end
         end
     end
+    if best == nil then return false end
     return best, true
 end
 
@@ -188,6 +208,7 @@ function ns.IsUpgrade(link)
     end
     if not usable or score <= 0 or ns.IsEquipped(link) then return false end
     local eq = ns.EquippedScore(loc)
+    if eq == false then return false end
     if eq == nil then return nil end
     return score > eq + (ns.db and ns.db.margin or 1)
 end
