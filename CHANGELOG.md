@@ -1,3 +1,7 @@
+## 0.2.1
+
+- Long option labels wrap inside the settings window.
+
 ## 0.2.0
 
 - Fixed: a one-handed weapon was shown as an upgrade over your shield (a dagger for a tank). The off hand is now compared only weapon to weapon, shield to shield, held item to held item; two-handers are not compared while you wear a shield.
