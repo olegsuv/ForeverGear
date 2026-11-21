@@ -44,6 +44,10 @@ local EQUIP = {
     { "^equip: restores (%d+) mana per 5 sec", "MP5" },
 }
 
+local function secret(v)
+    return issecretvalue ~= nil and issecretvalue(v) or false
+end
+
 local RANGED = { INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true, INVTYPE_THROWN = true }
 local SKIP = { INVTYPE_BAG = true, INVTYPE_QUIVER = true, INVTYPE_AMMO = true, INVTYPE_BODY = true, INVTYPE_TABARD = true, [""] = true }
 
@@ -68,7 +72,10 @@ local function getWeights()
 end
 
 local function isRed(c)
-    return c and c.r and c.r > 0.95 and c.g < 0.2 and c.b < 0.2
+    if type(c) ~= "table" then return false end
+    local r, g, b = c.r, c.g, c.b
+    if secret(r) or secret(g) or secret(b) then return false end
+    return type(r) == "number" and r > 0.95 and (g or 0) < 0.25 and (b or 0) < 0.25
 end
 
 local function tooltipLines(link)
@@ -82,7 +89,7 @@ local cache = {}
 function ns.ClearCache() wipe(cache) end
 
 -- returns score, usable, equipLoc  (nil if the item is not loaded yet)
-function ns.ItemScore(link)
+local function itemScore(link)
     if not link then return nil end
     local c = cache[link]
     if c then return c.score, c.usable, c.loc end
@@ -100,12 +107,18 @@ function ns.ItemScore(link)
     local w = getWeights()
     local score = 0
     local stats = C_Item.GetItemStats and C_Item.GetItemStats(link) or {}
+    local counted = {} -- stats the table gave; the same "Equip:" line is then not added again
     for key, value in pairs(stats) do
-        if key == "ITEM_MOD_DAMAGE_PER_SECOND_SHORT" then
-            score = score + value * ((RANGED[equipLoc] and w.RANGED_DPS) or w.MELEE_DPS or 0)
-        else
-            local k = STAT_KEYS[key]
-            if k and w[k] then score = score + value * w[k] end
+        if type(value) == "number" and not secret(value) then
+            if key == "ITEM_MOD_DAMAGE_PER_SECOND_SHORT" then
+                score = score + value * ((RANGED[equipLoc] and w.RANGED_DPS) or w.MELEE_DPS or 0)
+            else
+                local k = STAT_KEYS[key]
+                if k then
+                    counted[k] = true
+                    if w[k] then score = score + value * w[k] end
+                end
+            end
         end
     end
 
@@ -114,7 +127,7 @@ function ns.ItemScore(link)
     if lines then
         for _, line in ipairs(lines) do
             local text = line.leftText
-            if text and text ~= "" then
+            if type(text) == "string" and text ~= "" and not secret(text) then
                 if isRed(line.leftColor) or isRed(line.rightColor) then
                     -- red text in an item tooltip: wrong level, class or weapon/armor skill
                     usable = false
@@ -123,7 +136,7 @@ function ns.ItemScore(link)
                 if lower:find("^equip:") then
                     for _, p in ipairs(EQUIP) do
                         local n = lower:match(p[1])
-                        if n and w[p[2]] then
+                        if n and w[p[2]] and not counted[p[2]] then
                             score = score + tonumber(n) * w[p[2]]
                             break
                         end
@@ -140,6 +153,13 @@ function ns.ItemScore(link)
     return score, usable, equipLoc
 end
 
+-- one item the game hides from addons must not break the whole bag: no score, not usable
+function ns.ItemScore(link)
+    local ok, score, usable, loc = pcall(itemScore, link)
+    if ok then return score, usable, loc end
+    return nil, false
+end
+
 -- what sits in the off hand: a shield or a held item is a choice (tank, caster), not
 -- something a weapon upgrades
 local OFF_KIND = {
@@ -153,38 +173,51 @@ local function offHandKind()
     return OFF_KIND[loc]
 end
 
--- score of what you wear in the slots this item would replace (lowest of rings/trinkets/1h pair);
--- false when it would only replace a different kind of off hand (a dagger for your shield)
+local DUAL_WIELD = 674
+
+local function equippedScore(slot)
+    local l = GetInventoryItemLink("player", slot)
+    if not l then return 0 end
+    return ns.ItemScore(l) -- nil: not loaded yet
+end
+
+local function wearing2H()
+    local id = GetInventoryItemID("player", 16)
+    if not id then return false end
+    local _, _, _, loc = C_Item.GetItemInfoInstant(id)
+    return loc == "INVTYPE_2HWEAPON"
+end
+
+-- score of what the item displaces: the item in its slot, the weaker of two rings / trinkets /
+-- hands, and for anything that goes in the off hand while you wield a two-hander, that
+-- two-hander (an empty off hand next to a 2H is not a free slot). false when it would only
+-- replace a different kind of off hand (a dagger for your shield); nil when not loaded yet
 function ns.EquippedScore(equipLoc)
     local slots = SLOTS[equipLoc]
     if not slots then return nil end
     local off = offHandKind()
-    if equipLoc == "INVTYPE_2HWEAPON" and off == "shield" then return false end
+    local twoHand = wearing2H()
     if equipLoc == "INVTYPE_2HWEAPON" then
-        local sum, any = 0, false
-        for _, s in ipairs({ 16, 17 }) do
-            local l = GetInventoryItemLink("player", s)
-            if l then
-                local sc = ns.ItemScore(l)
-                if sc == nil then return nil end
-                sum, any = sum + sc, true
-            end
-        end
-        return sum, any
+        if off == "shield" then return false end
+        local a, b = equippedScore(16), equippedScore(17)
+        if a == nil or b == nil then return nil end
+        return a + b, true
     end
     local best
     for _, s in ipairs(slots) do
-        local l = GetInventoryItemLink("player", s)
-        local sc = 0
-        if l then
-            sc = ns.ItemScore(l)
-            if sc == nil then return nil end
+        local skip = false
+        if s == 17 then
+            -- one-handers / off-hand weapons need Dual Wield for the off hand
+            if (equipLoc == "INVTYPE_WEAPON" or equipLoc == "INVTYPE_WEAPONOFFHAND")
+                and not (IsPlayerSpell and IsPlayerSpell(DUAL_WIELD)) then skip = true end
+            -- off hand: only weapon vs weapon, shield vs shield, held item vs held item
+            if off and OFF_KIND[equipLoc] and off ~= OFF_KIND[equipLoc] then skip = true end
         end
-        -- one-handers: only compare with the off hand if you can dual wield;
-        -- off hand: only weapon vs weapon, shield vs shield, held item vs held item
-        local skip = s == 17 and ((equipLoc == "INVTYPE_WEAPON" and not (IsPlayerSpell and IsPlayerSpell(674)))
-            or (off and off ~= OFF_KIND[equipLoc]))
         if not skip then
+            local sc
+            if twoHand and (s == 16 or s == 17) then sc = equippedScore(16) -- the 2H goes
+            else sc = equippedScore(s) end
+            if sc == nil then return nil end
             if not best or sc < best then best = sc end
         end
     end

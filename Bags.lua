@@ -66,8 +66,10 @@ local function hookBagnon()
         if r then return r end
         if not (ns.db and ns.db.arrows) then return false end
         local link = self.info and self.info.hyperlink
-        if not link then return false end
-        return ns.IsUpgrade(link) -- nil = not loaded yet, Bagnon asks again shortly
+        if type(link) ~= "string" then return false end
+        local ok, up = pcall(ns.IsUpgrade, link)
+        if not ok then return false end
+        return up -- nil = not loaded yet, Bagnon asks again shortly
     end
     Item.foreverGearHooked = true
     -- subclasses (bag/bank buttons) normally inherit it; set it on them too in case they copied methods
@@ -86,45 +88,56 @@ end
 local function markButton(button, bag, slot)
     if not button then return end
     local show = false
-    if ns.db.arrows then
+    if ns.db and ns.db.arrows then
         local link = C_Container.GetContainerItemLink(bag, slot)
-        show = link and ns.IsUpgrade(link) or false
+        if type(link) == "string" then
+            local ok, up = pcall(ns.IsUpgrade, link)
+            show = ok and up or false
+        end
     end
     if show and not button.foreverGearArrow then
         local t = button:CreateTexture(nil, "OVERLAY", nil, 7)
-        t:SetAtlas("bags-greenarrow", true)
-        if not t:GetAtlas() then t:SetTexture("Interface\\Buttons\\UI-MicroStream-Green") end
+        local okAtlas = pcall(t.SetAtlas, t, "bags-greenarrow", true)
+        if not okAtlas or not t:GetAtlas() then
+            t:SetTexture("Interface\\Buttons\\UI-MicroStream-Green")
+            t:SetSize(16, 16)
+        end
         t:SetPoint("TOPLEFT", 1, -1)
         button.foreverGearArrow = t
     end
     if button.foreverGearArrow then button.foreverGearArrow:SetShown(show) end
 end
 
+local function eachShownButton(frame)
+    if not (frame and frame:IsShown() and frame.EnumerateValidItems) then return end
+    for _, button in frame:EnumerateValidItems() do
+        local bag = button.GetBagID and button:GetBagID()
+        local slot = button.GetID and button:GetID()
+        if bag and slot then markButton(button, bag, slot) end
+    end
+end
+
 local function updateDefaultBags()
     for i = 1, (NUM_CONTAINER_FRAMES or 13) do
-        local frame = _G["ContainerFrame" .. i]
-        if frame and frame:IsShown() and frame.EnumerateValidItems then
-            for _, button in frame:EnumerateValidItems() do
-                local bag = button.GetBagID and button:GetBagID()
-                local slot = button.GetID and button:GetID()
-                if bag and slot then markButton(button, bag, slot) end
-            end
-        end
+        eachShownButton(_G["ContainerFrame" .. i])
     end
-    local combined = ContainerFrameCombinedBags
-    if combined and combined:IsShown() and combined.EnumerateValidItems then
-        for _, button in combined:EnumerateValidItems() do
-            local bag = button.GetBagID and button:GetBagID()
-            local slot = button.GetID and button:GetID()
-            if bag and slot then markButton(button, bag, slot) end
-        end
-    end
+    eachShownButton(ContainerFrameCombinedBags)
 end
 
 ---------------------------------------------------------------------------
 local frame = CreateFrame("Frame")
 local usingBagnon = false
-local pending = 0
+
+-- one redraw a moment later, however many events asked for it
+local scheduled = false
+local function refreshSoon(delay)
+    if scheduled then return end
+    scheduled = true
+    C_Timer.After(delay or 0.3, function()
+        scheduled = false
+        if usingBagnon then refreshBagnon() else updateDefaultBags() end
+    end)
+end
 
 frame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
@@ -146,20 +159,13 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         if ns.InitOptions then ns.InitOptions() end
     elseif event == "PLAYER_LEVEL_UP" or event == "SKILL_LINES_CHANGED" then
         ns.ClearCache()
-        refreshBagnon()
+        refreshSoon(0.1)
     elseif event == "GET_ITEM_INFO_RECEIVED" then
-        -- items that were not loaded yet: redraw default bags a moment later
-        if not usingBagnon then pending = 0.3 end
-    end
-    if not usingBagnon and (event == "BAG_UPDATE_DELAYED" or event == "PLAYER_EQUIPMENT_CHANGED") then
-        updateDefaultBags()
-    end
-end)
-
-frame:SetScript("OnUpdate", function(_, e)
-    if pending > 0 then
-        pending = pending - e
-        if pending <= 0 then updateDefaultBags() end
+        refreshSoon(0.3) -- items that were not loaded yet
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+        refreshSoon(0.1) -- what counts as "equipped" changed: every arrow may flip
+    elseif event == "BAG_UPDATE_DELAYED" then
+        if not usingBagnon then updateDefaultBags() end
     end
 end)
 
@@ -170,12 +176,12 @@ end
 
 -- default bag frames redraw when opened
 if ContainerFrame_OnShow then
-    pcall(hooksecurefunc, "ContainerFrame_OnShow", function() if not usingBagnon then pending = 0.05 end end)
+    pcall(hooksecurefunc, "ContainerFrame_OnShow", function() if not usingBagnon then refreshSoon(0.05) end end)
 end
 for i = 1, (NUM_CONTAINER_FRAMES or 13) do
     local f = _G["ContainerFrame" .. i]
-    if f then f:HookScript("OnShow", function() if not usingBagnon then pending = 0.05 end end) end
+    if f then f:HookScript("OnShow", function() if not usingBagnon then refreshSoon(0.05) end end) end
 end
 if ContainerFrameCombinedBags then
-    ContainerFrameCombinedBags:HookScript("OnShow", function() if not usingBagnon then pending = 0.05 end end)
+    ContainerFrameCombinedBags:HookScript("OnShow", function() if not usingBagnon then refreshSoon(0.05) end end)
 end
