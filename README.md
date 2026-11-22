@@ -13,6 +13,10 @@ For **WoW Forever** (Interface 16001):
 The score weighs stats for your class (rough leveling values), weapon damage per second
 and "Equip:" bonuses. Items you can't use (level, armor or weapon skill) never get an arrow.
 
+Optional (off by default): at a vendor, sell gray items and gear you can't use or that is worse
+than what you wear. Greens only when soulbound and never with Enchanting (disenchant them);
+blue and better is never sold.
+
 ![Settings window](media/screenshot-settings.png)
 
 `/fgear` – settings (also the minimap button and the addons menu).

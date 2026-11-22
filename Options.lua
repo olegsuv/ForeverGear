@@ -12,6 +12,8 @@ local function build()
         function(v) db.tooltip = v end)
     win:AddSlider("Count as better when ahead by", 0, 10, 1, function() return db.margin end,
         function(v) db.margin = v; ns.RefreshBags() end, function(v) return v == 1 and "1 point" or ("%d points"):format(v) end)
+    win:AddCheck("Sell at vendors: gray items, and gear you can't use or that is worse than yours (soulbound greens only, none with Enchanting; blue and better never)",
+        function() return db.autoSell end, function(v) db.autoSell = v or nil end)
     win:AddCheck("Minimap button", function() return not db.minimapHide end,
         function(v) db.minimapHide = not v; mini:UpdateShown() end)
     win:Finish()

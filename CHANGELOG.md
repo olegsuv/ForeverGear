@@ -1,3 +1,7 @@
+## 0.3.0
+
+- Optional, off by default: at a vendor, sell gray items and gear you can't use or that is worse than what you wear. Greens go only when soulbound, and not at all when you have Enchanting (disenchant them instead); blue and better is never sold. Settings: "Sell at vendors". A chat line sums up what was sold; the vendor's buyback list has the last 12.
+
 ## 0.2.2
 
 - Fixed: with a two-hander equipped, any shield, held item or one-hander got an arrow (the empty off hand counted as a free slot). They are now compared with the two-hander they would displace.
