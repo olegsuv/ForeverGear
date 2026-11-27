@@ -36,7 +36,8 @@ local function addScoreLine(tooltip, data)
         local eq = ns.EquippedScore(loc)
         if eq then
             local d = score - eq
-            local color = d > (ns.db.margin or 1) and "|cff33ff33" or (d < -(ns.db.margin or 1) and "|cffff4444" or "|cffaaaaaa")
+            local ahead = ns.Ahead(score, eq)
+            local color = ahead > 0 and "|cff33ff33" or (ahead < 0 and "|cffff4444" or "|cffaaaaaa")
             text = ("|cff66ccffUpgrade score %s|r %s(%+.1f vs equipped)|r"):format(score, color, d)
         elseif eq == false then
             text = ("|cff66ccffUpgrade score %s|r |cffaaaaaa(not compared with your off hand)|r"):format(score)
@@ -85,16 +86,8 @@ end
 ---------------------------------------------------------------------------
 -- Default bags (no Bagnon): our own small arrow on container buttons
 ---------------------------------------------------------------------------
-local function markButton(button, bag, slot)
-    if not button then return end
-    local show = false
-    if ns.db and ns.db.arrows then
-        local link = C_Container.GetContainerItemLink(bag, slot)
-        if type(link) == "string" then
-            local ok, up = pcall(ns.IsUpgrade, link)
-            show = ok and up or false
-        end
-    end
+-- the green arrow on a button (bag slot, loot roll icon...)
+local function arrowOn(button, show)
     if show and not button.foreverGearArrow then
         local t = button:CreateTexture(nil, "OVERLAY", nil, 7)
         local okAtlas = pcall(t.SetAtlas, t, "bags-greenarrow", true)
@@ -105,7 +98,30 @@ local function markButton(button, bag, slot)
         t:SetPoint("TOPLEFT", 1, -1)
         button.foreverGearArrow = t
     end
-    if button.foreverGearArrow then button.foreverGearArrow:SetShown(show) end
+    if button.foreverGearArrow then button.foreverGearArrow:SetShown(show and true or false) end
+end
+
+local function upgradeOf(link)
+    if not (ns.db and ns.db.arrows) or type(link) ~= "string" then return false end
+    local ok, up = pcall(ns.IsUpgrade, link)
+    return ok and up or false
+end
+
+local function markButton(button, bag, slot)
+    if not button then return end
+    arrowOn(button, upgradeOf(C_Container.GetContainerItemLink(bag, slot)))
+end
+
+-- group loot: the arrow on the roll frame's icon, before you pick need / greed / pass
+local function markRollFrames()
+    for i = 1, NUM_GROUP_LOOT_FRAMES or 4 do
+        local f = _G["GroupLootFrame" .. i]
+        if f and f:IsShown() and f.rollID then
+            local ok, link = pcall(GetLootRollItemLink, f.rollID)
+            local icon = f.IconFrame or f
+            arrowOn(icon, ok and upgradeOf(link))
+        end
+    end
 end
 
 local function eachShownButton(frame)
@@ -146,6 +162,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
             for k, v in pairs(ns.DEFAULTS) do
                 if ForeverGearDB[k] == nil then ForeverGearDB[k] = v end
             end
+            ForeverGearDB.margin, ForeverGearDB.marginPct = nil, nil -- 0.3.1: minGainPct, any gain by default
             ns.db = ForeverGearDB
         end
         if not usingBagnon then usingBagnon = hookBagnon() end
@@ -166,11 +183,15 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         refreshSoon(0.1) -- what counts as "equipped" changed: every arrow may flip
     elseif event == "BAG_UPDATE_DELAYED" then
         if not usingBagnon then updateDefaultBags() end
+    elseif event == "START_LOOT_ROLL" then
+        -- the roll frame is filled by the game's own handler: look right after it
+        C_Timer.After(0, markRollFrames)
+        C_Timer.After(0.5, markRollFrames) -- the item may load late
     end
 end)
 
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_LEVEL_UP", "SKILL_LINES_CHANGED",
-                     "GET_ITEM_INFO_RECEIVED", "BAG_UPDATE_DELAYED", "PLAYER_EQUIPMENT_CHANGED" }) do
+                     "GET_ITEM_INFO_RECEIVED", "BAG_UPDATE_DELAYED", "PLAYER_EQUIPMENT_CHANGED", "START_LOOT_ROLL" }) do
     pcall(frame.RegisterEvent, frame, e)
 end
 

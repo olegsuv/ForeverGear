@@ -3,7 +3,7 @@ local ADDON, ns = ...
 -- Upgrade score: stats weighted for your class (rough leveling values),
 -- weapon damage per second, and "Equip:" bonuses read from the tooltip.
 
-ns.DEFAULTS = { arrows = true, tooltip = true, margin = 1 }
+ns.DEFAULTS = { arrows = true, tooltip = true, minGainPct = 0 } -- better when ahead by more than this % of what you wear (0: any gain)
 
 local W = {
     HUNTER  = { AGI = 1, RAP = 0.45, AP = 0.45, STA = 0.3, INT = 0.25, STR = 0.05, SPI = 0.05, ARMOR = 0.01,
@@ -243,5 +243,14 @@ function ns.IsUpgrade(link)
     local eq = ns.EquippedScore(loc)
     if eq == false then return false end
     if eq == nil then return nil end
-    return score > eq + (ns.db and ns.db.margin or 1)
+    return ns.Ahead(score, eq) > 0
+end
+
+-- 1 better, -1 worse, 0 the same: a difference counts past minGainPct % of what you wear
+-- (0 by default: any gain gets the arrow; scores are small at low levels)
+function ns.Ahead(score, eq)
+    local need = eq * ((ns.db and ns.db.minGainPct or 0) / 100)
+    if score > eq + need then return 1 end
+    if score < eq - need then return -1 end
+    return 0
 end

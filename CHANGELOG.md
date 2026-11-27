@@ -1,3 +1,8 @@
+## 0.3.1
+
+- Green arrow on group loot rolls too (on the item's icon, before you pick need / greed / pass).
+- Any gain over what you wear gets the arrow (it needed a full point, so a +0.8 cloak or a +1.0 sword got none). Settings can ask for a percentage instead.
+
 ## 0.3.0
 
 - Optional, off by default: at a vendor, sell gray items and gear you can't use or that is worse than what you wear. Greens go only when soulbound, and not at all when you have Enchanting (disenchant them instead); blue and better is never sold. Settings: "Sell at vendors". A chat line sums up what was sold; the vendor's buyback list has the last 12.
